@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Movie Website Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/izitoast@1.4.0/dist/js/iziToast.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/izitoast@1.4.0/dist/css/iziToast.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@shopify/draggable@1.0.0-beta.8/lib/draggable.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.min.js"></script>
+    <style>
+        .widget {
+            transition: all 0.3s ease;
+        }
+        .widget:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #wordCloud {
+            width: 100%;
+            height: 300px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center text-blue-600">i1Movies Website Dashboard</h1>
+        
+        <div id="dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Real-time Viewers</h2>
+                <canvas id="viewersChart"></canvas>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Trending Movies</h2>
+                <div id="trendingMoviesChart"></div>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">User Activity</h2>
+                <canvas id="userActivityChart"></canvas>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Top Genres</h2>
+                <div id="topGenresChart"></div>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Server Load</h2>
+                <div id="serverLoadGauge"></div>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Recent Reviews</h2>
+                <div id="recentReviewsTable"></div>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Movie Keyword Cloud</h2>
+                <div id="wordCloud"></div>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">Revenue Forecast</h2>
+                <canvas id="revenueForecastChart"></canvas>
+            </div>
+            <div class="widget bg-white p-4 rounded-lg shadow" draggable="true">
+                <h2 class="text-xl font-semibold mb-2">User Retention</h2>
+                <div id="userRetentionChart"></div>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-white p-4 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-2">Live Events</h2>
+            <div id="liveEvents" class="h-40 overflow-y-auto bg-gray-100 p-2 rounded"></div>
+        </div>
+
+        <div class="mt-8 flex justify-between">
+            <button id="exportData" class="bg-green-500 text-white p-2 rounded hover:bg-green-600 transition-colors">Export Dashboard Data</button>
+            <button id="toggleDarkMode" class="bg-gray-800 text-white p-2 rounded hover:bg-gray-700 transition-colors">Toggle Dark Mode</button>
+        </div>
+    </div>
+
+    <script>
+        let viewersChart, userActivityChart, trendingMoviesChart, topGenresChart, serverLoadGauge, revenueForecastChart, userRetentionChart;
+        let isDarkMode = false;
+
+        function initCharts() {
+            viewersChart = new Chart(document.getElementById('viewersChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Active Viewers',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'minute'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            userActivityChart = new Chart(document.getElementById('userActivityChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Likes', 'Comments', 'Shares', 'Watchlist Adds'],
+                    datasets: [{
+                        label: 'User Activity',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.5)',
+                            'rgba(54, 162, 235, 0.5)',
+                            'rgba(255, 206, 86, 0.5)',
+                            'rgba(75, 192, 192, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgb(255, 99, 132)',
+                            'rgb(54, 162, 235)',
+                            'rgb(255, 206, 86)',
+                            'rgb(75, 192, 192)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            trendingMoviesChart = new ApexCharts(document.getElementById('trendingMoviesChart'), {
+                series: [{
+                    name: 'Views',
+                    data: [0, 0, 0, 0, 0]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 250
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                    }
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                xaxis: {
+                    categories: ['Movie 1', 'Movie 2', 'Movie 3', 'Movie 4', 'Movie 5'],
+                }
+            });
+            trendingMoviesChart.render();
+
+
+            topGenresChart = new ApexCharts(document.getElementById('topGenresChart'), {
+                series: [0, 0, 0, 0, 0],
+                chart: {
+                    type: 'donut',
+                    height: 250
+                },
+                labels: ['Action', 'Comedy', 'Drama', 'Sci-Fi', 'Horror'],
+                responsive: [{
+                    breakpoint: 480,
+                    options: {
+                        chart: {
+                            width: 200
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }]
+            });
+            topGenresChart.render();
+
+            serverLoadGauge = new ApexCharts(document.getElementById('serverLoadGauge'), {
+                series: [0],
+                chart: {
+                    height: 200,
+                    type: 'radialBar',
+                },
+                plotOptions: {
+                    radialBar: {
+                        hollow: {
+                            size: '70%',
+                        },
+                        dataLabels: {
+                            show: true,
+                            name: {
+                                offsetY: -10,
+                                show: true,
+                                color: '#888',
+                                fontSize: '13px'
+                            },
+                            value: {
+                                color: '#111',
+                                fontSize: '30px',
+                                show: true,
+                            }
+                        }
+                    }
+                },
+                labels: ['Server Load'],
+            });
+            serverLoadGauge.render();
+
+            new gridjs.Grid({
+                columns: ["User", "Movie", "Rating", "Comment"],
+                data: [],
+                sort: true,
+                pagination: {
+                    limit: 5
+                },
+                style: {
+                    table: {
+                        'font-size': '0.875rem'
+                    }
+                }
+            }).render(document.getElementById("recentReviewsTable"));
+
+            revenueForecastChart = new Chart(document.getElementById('revenueForecastChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Actual Revenue',
+                        data: [1000, 1200, 1400, 1300, 1500, 1700],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }, {
+                        label: 'Forecast Revenue',
+                        data: [1000, 1200, 1400, 1300, 1500, 1700, 1900, 2100, 2300, 2500, 2700, 2900],
+                        borderColor: 'rgb(255, 99, 132)',
+                        borderDash: [5, 5],
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            userRetentionChart = new ApexCharts(document.getElementById('userRetentionChart'), {
+                series: [{
+                    name: 'User Retention',
+                    data: [100, 90, 80, 70, 60, 50, 40, 30]
+                }],
+                chart: {
+                    height: 250,
+                    type: 'area'
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                stroke: {
+                    curve: 'smooth'
+                },
+                xaxis: {
+                    type: 'category',
+                    categories: ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6", "Week 7", "Week 8"]
+                },
+                tooltip: {
+                    x: {
+                        format: 'dd/MM/yy HH:mm'
+                    },
+                }
+            });
+            userRetentionChart.render();
+
+            updateWordCloud();
+        }
+
+        function updateCharts() {
+            const now = new Date();
+            
+            // Update viewers
+            const viewers = Math.floor(Math.random() * 1000) + 500;
+            viewersChart.data.datasets[0].data.push({x: now, y: viewers});
+            if (viewersChart.data.datasets[0].data.length > 20) {
+                viewersChart.data.datasets[0].data.shift();
+            }
+            viewersChart.update();
+
+            // Update user activity
+            userActivityChart.data.datasets[0].data = userActivityChart.data.datasets[0].data.map(value => value + Math.floor(Math.random() * 10));
+            userActivityChart.update();
+
+            // Update trending movies
+            trendingMoviesChart.updateSeries([{
+                data: [
+                    Math.floor(Math.random() * 1000),
+                    Math.floor(Math.random() * 1000),
+                    Math.floor(Math.random() * 1000),
+                    Math.floor(Math.random() * 1000),
+                    Math.floor(Math.random() * 1000)
+                ]
+            }]);
+
+            // Update top genres
+            topGenresChart.updateSeries([
+                Math.floor(Math.random() * 100),
+                Math.floor(Math.random() * 100),
+                Math.floor(Math.random() * 100),
+                Math.floor(Math.random() * 100),
+                Math.floor(Math.random() * 100)
+            ]);
+
+            // Update server load
+            const serverLoad = Math.floor(Math.random() * 100);
+            serverLoadGauge.updateSeries([serverLoad]);
+
+            // Simulate new review
+            const users = ['Alice', 'Bob', 'Charlie', 'David', 'Eva'];
+            const movies = ['Inception', 'The Matrix', 'Interstellar', 'The Dark Knight', 'Pulp Fiction'];
+            const ratings = [1, 2, 3, 4, 5];
+            const comments = ['Great movie!', 'Disappointing...', 'Must watch!', 'Overrated', 'Instant classic'];
+
+            const newReview = [
+                users[Math.floor(Math.random() * users.length)],
+                movies[Math.floor(Math.random() * movies.length)],
+                ratings[Math.floor(Math.random() * ratings.length)],
+                comments[Math.floor(Math.random() * comments.length)]
+            ];
+
+            const reviewsTable = document.querySelector('.gridjs-table tbody');
+            if (reviewsTable) {
+                if (reviewsTable.children.length >= 5) {
+                    reviewsTable.removeChild(reviewsTable.lastChild);
+                }
+                const newRow = document.createElement('tr');
+                newReview.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    newRow.appendChild(td);
+                });
+                reviewsTable.insertBefore(newRow, reviewsTable.firstChild);
+            }
+
+            // Simulate live event
+            const events = [
+                'New user registered',
+                'Movie added to watchlist',
+                'Subscription renewed',
+                'High traffic alert'
+            ];
+            const event = events[Math.floor(Math.random() * events.length)];
+            const liveEvents = document.getElementById('liveEvents');
+            const eventElement = document.createElement('div');
+            eventElement.textContent = `[${now.toLocaleTimeString()}] ${event}`;
+            liveEvents.insertBefore(eventElement, liveEvents.firstChild);
+            if (liveEvents.children.length > 10) {
+                liveEvents.removeChild(liveEvents.lastChild);
+            }
+
+            // Show notification for the event
+            iziToast.show({
+                title: 'New Event',
+                message: event,
+                position: 'topRight',
+                timeout: 3000
+            });
+
+            updateWordCloud();
+        }
+
+        function updateWordCloud() {
+            const words = [
+                'Action', 'Adventure', 'Comedy', 'Drama', 'Sci-Fi', 'Thriller', 'Romance', 'Horror',
+                'Fantasy', 'Animation', 'Mystery', 'Crime', 'Documentary', 'Family', 'Western',
+                'History', 'War', 'Biography', 'Music', 'Sport'
+            ];
+
+            const data = words.map(word => ({
+                text: word,
+                size: 10 + Math.random() * 90
+            }));
+
+            d3.select("#wordCloud").selectAll("*").remove();
+
+            const layout = d3.layout.cloud()
+                .size([300, 300])
+                .words(data)
+                .padding(5)
+                .rotate(() => ~~(Math.random() * 2) * 90)
+                .font("Impact")
+                .fontSize(d => d.size)
+                .on("end", draw);
+
+            layout.start();
+
+            function draw(words) {
+                d3.select("#wordCloud").append("svg")
+                    .attr("width", layout.size()[0])
+                    .attr("height", layout.size()[1])
+                    .append("g")
+                    .attr("transform", "translate(" + layout.size()[0] / 2 + "," + layout.size()[1] / 2 + ")")
+                    .selectAll("text")
+                    .data(words)
+                    .enter().append("text")
+                    .style("font-size", d => d.size + "px")
+                    .style("font-family", "Impact")
+                    .style("fill", () => d3.schemeCategory10[Math.floor(Math.random() * 10)])
+                    .attr("text-anchor", "middle")
+                    .attr("transform", d => "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")")
+                    .text(d => d.text);
+            }
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark');
+            if (isDarkMode) {
+                document.body.classList.add('bg-gray-900', 'text-white');
+                document.querySelectorAll('.bg-white').forEach(el => {
+                    el.classList.remove('bg-white');
+                    el.classList.add('bg-gray-800');
+                });
+            } else {
+                document.body.classList.remove('bg-gray-900', 'text-white');
+                document.querySelectorAll('.bg-gray-800').forEach(el => {
+                    el.classList.remove('bg-gray-800');
+                    el.classList.add('bg-white');
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            setInterval(updateCharts, 2000);
+
+            document.getElementById('exportData').addEventListener('click', () => {
+                const data = {
+                    viewers: viewersChart.data.datasets[0].data,
+                    userActivity: userActivityChart.data.datasets[0].data,
+                    trendingMovies: trendingMoviesChart.w.globals.series[0].data,
+                    topGenres: topGenresChart.w.globals.series,
+                    serverLoad: serverLoadGauge.w.globals.series[0]
+                };
+                const csv = Papa.unparse(data);
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'movie_dashboard_data.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+
+            document.getElementById('toggleDarkMode').addEventListener('click', toggleDarkMode);
+
+            // Initialize draggable functionality
+            new Draggable.Sortable(document.querySelectorAll('#dashboard-grid'), {
+                draggable: '.widget',
+                handle: 'h2'
+            });
+        });
+    </script>
+</body>
+</html>
